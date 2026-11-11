@@ -20,6 +20,7 @@ class OrderService:
     # Constants for standard delivery
     FREE_DELIVERY_THRESHOLD_CENTS = 10000
     DELIVERY_FEE_CENTS = 600
+    EXPRESS_DELIVERY_FEE_CENTS = 1200 # Express delivery fee in cents
 
     def __init__(self, state_path=".supplydesk/state.json"):
         self.store = JsonStore(state_path)
@@ -33,8 +34,8 @@ class OrderService:
         # Check that the customer type and fulfillment are valid
         if customer_type not in ("regular", "student"):
             raise ValueError("Customer type must be regular or student.")
-        if fulfillment not in ("pickup", "delivery"):
-            raise ValueError("Fulfillment must be pickup or delivery.")
+        if fulfillment not in ("pickup", "delivery", "express"):
+            raise ValueError("Fulfillment must be pickup, delivery, or express.")
 
         # Make sure the order contains at least one item
         if not isinstance(items, list) or not items:
@@ -91,6 +92,13 @@ class OrderService:
         # Calculate the delivery fee
         delivery = 0
         if fulfillment == "delivery" and subtotal - discount < self.FREE_DELIVERY_THRESHOLD_CENTS:
+            delivery = self.DELIVERY_FEE_CENTS
+        elif fulfillment == "express":
+            delivery = self.EXPRESS_DELIVERY_FEE_CENTS
+
+        # Standard delivery is free when the discounted subtotal reaches the threshold
+        elif (fulfillment == "delivery"
+                and subtotal - discount < self.FREE_DELIVERY_THRESHOLD_CENTS):
             delivery = self.DELIVERY_FEE_CENTS
 
         # Return the quote information
