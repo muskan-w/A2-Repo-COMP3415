@@ -3,6 +3,7 @@
 
 from supplydesk.storage import JsonStore
 
+#generated
 
 class OrderService:
     def __init__(self, state_path=".supplydesk/state.json"):
@@ -11,7 +12,8 @@ class OrderService:
     def catalog(self):
         return self.store.load()["catalog"]
 
-    # Refactoring 1: Shared quote calculation
+    # Refactoring 1: Shared quote calculation  
+
     def _build_quote(self, state, customer_type, items, fulfillment):
         # Check that the customer type and fulfillment are valid
         if customer_type not in ("regular", "student"):
@@ -85,13 +87,9 @@ class OrderService:
         # Use the shared helper to calculate the quote
         return self._build_quote(state, customer_type, items, fulfillment)
 
-    def place_order(self, customer_type, items, fulfillment="pickup"):
-        state = self.store.load()
-
-        # Calculate the quote using the shared helper
-        quote = self._build_quote(state, customer_type, items, fulfillment)
-
-        # Create the order using the calculated quote
+        # Refactoring 2
+    def _create_order_record(self, state, quote):
+        # Build the order using the next available order number
         order = {
             "order_id": "ORD-" + str(state["next_order_number"]).zfill(4),
             "status": "placed",
@@ -104,19 +102,42 @@ class OrderService:
             "total_cents": quote["total_cents"],
         }
 
-        # Reduce stock for each item in the order
-        for line in quote["items"]:
+        return order
+
+    # Update the stock after an order has been created
+    def _update_stock(self, state, items):
+        # Go through each item in the order
+        for line in items:
+            # Find the matching product in the catalog
             for product in state["catalog"]:
                 if product["product_id"] == line["product_id"]:
+                    # Reduce the available stock by the ordered quantity
                     product["stock"] -= line["quantity"]
 
-        # Save the updated order and inventory
+    def place_order(self, customer_type, items, fulfillment="pickup"):
+        state = self.store.load()
+
+        # Calculate the quote using the shared helper
+        quote = self._build_quote(state, customer_type, items, fulfillment)
+
+        # Calculate the quote using the shared helper
+        quote = self._build_quote(state, customer_type, items, fulfillment)
+
+        # Create the order record using the calculated quote
+        order = self._create_order_record(state, quote)
+
+        # Update the inventory after the order is created
+        self._update_stock(state, quote["items"])
+
+        # Update the order number and add the order to storage
         state["next_order_number"] += 1
         state["orders"].append(order)
+
+        # Save the updated data
         self.store.save(state)
 
         return order
-
+        
     def list_orders(self):
         return self.store.load()["orders"]
 
