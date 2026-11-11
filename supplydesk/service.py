@@ -6,13 +6,28 @@ from supplydesk.storage import JsonStore
 #generated
 
 class OrderService:
+
+    # Constants for order quantity validation
+    MIN_ITEM_QUANTITY = 1
+    MAX_ITEM_QUANTITY = 99
+
+    # Constants for student discounts
+    STUDENT_DISCOUNT_THRESHOLD_CENTS = 5000
+    STUDENT_DISCOUNT_PERCENT = 10
+    DISCOUNT_ROUNDING_ADJUSTMENT = 50
+    PERCENTAGE_DIVISOR = 100
+
+    # Constants for standard delivery
+    FREE_DELIVERY_THRESHOLD_CENTS = 10000
+    DELIVERY_FEE_CENTS = 600
+
     def __init__(self, state_path=".supplydesk/state.json"):
         self.store = JsonStore(state_path)
 
     def catalog(self):
         return self.store.load()["catalog"]
 
-    # Refactoring 1: Shared quote calculation  
+    # Refactoring 1: Shared quote calculation
 
     def _build_quote(self, state, customer_type, items, fulfillment):
         # Check that the customer type and fulfillment are valid
@@ -43,8 +58,12 @@ class OrderService:
                 raise ValueError("Unknown product.")
 
             quantity = item.get("quantity")
-            if type(quantity) is not int or quantity < 1 or quantity > 99:
-                raise ValueError("Quantity must be an integer from 1 to 99.")
+
+            # Check that quantity is within the allowed range
+            if (type(quantity) is not int
+                    or quantity < self.MIN_ITEM_QUANTITY
+                    or quantity > self.MAX_ITEM_QUANTITY):
+                raise ValueError(f"Quantity must be an integer from {self.MIN_ITEM_QUANTITY} to {self.MAX_ITEM_QUANTITY}.")
 
             if quantity > product["stock"]:
                 raise ValueError("Not enough stock for " + product["product_id"] + ".")
@@ -62,13 +81,17 @@ class OrderService:
 
         # Calculate the student discount
         discount = 0
-        if customer_type == "student" and subtotal > 5000:
-            discount = (subtotal * 10 + 50) // 100
+                # Apply the student discount when the subtotal exceeds the threshold
+        if customer_type == "student" and subtotal > self.STUDENT_DISCOUNT_THRESHOLD_CENTS:
+            discount = (
+                subtotal * self.STUDENT_DISCOUNT_PERCENT
+                + self.DISCOUNT_ROUNDING_ADJUSTMENT
+            ) // self.PERCENTAGE_DIVISOR
 
         # Calculate the delivery fee
         delivery = 0
-        if fulfillment == "delivery" and subtotal - discount < 10000:
-            delivery = 600
+        if fulfillment == "delivery" and subtotal - discount < self.FREE_DELIVERY_THRESHOLD_CENTS:
+            delivery = self.DELIVERY_FEE_CENTS
 
         # Return the quote information
         return {
@@ -137,7 +160,7 @@ class OrderService:
         self.store.save(state)
 
         return order
-        
+
     def list_orders(self):
         return self.store.load()["orders"]
 
